@@ -1,7 +1,7 @@
 import { Form, ActionPanel, Action, showToast, Toast, popToRoot, Icon } from "@raycast/api";
-import { execSync } from "child_process";
 import { existsSync } from "fs";
 import { useState } from "react";
+import { runBacklog } from "./backlog";
 import { useActiveProject } from "./preferences";
 
 const PRIORITIES = [
@@ -10,10 +10,6 @@ const PRIORITIES = [
   { title: "Medium", value: "medium" },
   { title: "Low", value: "low" },
 ];
-
-function shellArg(value: string): string {
-  return `'${value.replace(/'/g, "'\\''")}'`;
-}
 
 export default function Command() {
   const [titleError, setTitleError] = useState<string | undefined>();
@@ -25,18 +21,18 @@ export default function Command() {
   const [refItems, setRefItems] = useState<string[]>([""]);
   const [docItems, setDocItems] = useState<string[]>([""]);
 
-  function handleSubmit(values: Record<string, unknown>) {
+  async function handleSubmit(values: Record<string, unknown>) {
     const title = (values.title as string).trim();
     if (!title) {
       setTitleError("Title is required");
       return;
     }
 
-    const args: string[] = ["task", "create", shellArg(title)];
+    const args: string[] = ["task", "create", title];
 
     const description = (values.description as string)?.trim();
     if (description) {
-      args.push("--description", shellArg(description));
+      args.push("--description", description);
     }
 
     const priority = values.priority as string;
@@ -51,12 +47,12 @@ export default function Command() {
         .map((l) => l.trim())
         .filter(Boolean)
         .join(",");
-      if (cleaned) args.push("--labels", shellArg(cleaned));
+      if (cleaned) args.push("--labels", cleaned);
     }
 
     const assignee = (values.assignee as string)?.trim();
     if (assignee) {
-      args.push("--assignee", shellArg(assignee));
+      args.push("--assignee", assignee);
     }
 
     if (values.isDraft) {
@@ -66,73 +62,65 @@ export default function Command() {
     // Parent task
     const parent = (values.parent as string)?.trim();
     if (parent) {
-      args.push("--parent", shellArg(parent));
+      args.push("--parent", parent);
     }
 
     // Dependencies
     const dependsOn = (values.dependsOn as string)?.trim();
     if (dependsOn) {
-      args.push("--depends-on", shellArg(dependsOn));
+      args.push("--depends-on", dependsOn);
     }
 
     // Notes
     const notes = (values.notes as string)?.trim();
     if (notes) {
-      args.push("--notes", shellArg(notes));
+      args.push("--notes", notes);
     }
 
     // Acceptance criteria (multiple --ac flags)
-    for (const item of acItems) {
-      const val = (values[`ac-${acItems.indexOf(item)}`] as string)?.trim();
-      if (val) args.push("--ac", shellArg(val));
+    for (let i = 0; i < acItems.length; i++) {
+      const val = (values[`ac-${i}`] as string)?.trim();
+      if (val) args.push("--ac", val);
     }
 
     // Definition of Done (multiple --dod flags)
     if (values.noDodDefaults) {
       args.push("--no-dod-defaults");
     }
-    for (const item of dodItems) {
-      const val = (values[`dod-${dodItems.indexOf(item)}`] as string)?.trim();
-      if (val) args.push("--dod", shellArg(val));
+    for (let i = 0; i < dodItems.length; i++) {
+      const val = (values[`dod-${i}`] as string)?.trim();
+      if (val) args.push("--dod", val);
     }
 
     // References (multiple --ref flags) - from text fields
     for (let i = 0; i < refItems.length; i++) {
       const val = (values[`ref-${i}`] as string)?.trim();
-      if (val) args.push("--ref", shellArg(val));
+      if (val) args.push("--ref", val);
     }
 
     // Docs (multiple --doc flags)
     for (let i = 0; i < docItems.length; i++) {
       const val = (values[`doc-${i}`] as string)?.trim();
-      if (val) args.push("--doc", shellArg(val));
+      if (val) args.push("--doc", val);
     }
 
     // File attachments via FilePicker → --ref
     const attachments = ((values.attachments as string[]) || []).filter((f) => existsSync(f));
     for (const file of attachments) {
-      args.push("--ref", shellArg(file));
+      args.push("--ref", file);
     }
 
     args.push("--plain");
 
-    const cmd = `${config.backlogPath} ${args.join(" ")}`;
-
     try {
-      showToast({ style: Toast.Style.Animated, title: "Creating task..." });
+      await showToast({ style: Toast.Style.Animated, title: "Creating task..." });
 
-      const output = execSync(cmd, {
-        cwd: activeProject,
-        encoding: "utf-8",
-        timeout: 15000,
-        shell: "/bin/zsh",
-        env: { ...process.env, FORCE_COLOR: "0" },
-      });
+      const output = await runBacklog(args, activeProject);
 
       const idMatch = output.match(/(?:task|TASK)[-\s]?(\S+)/i);
       const taskId = idMatch ? idMatch[1] : undefined;
 
-      showToast({
+      await showToast({
         style: Toast.Style.Success,
         title: "Task created",
         message: taskId ? `Task ${taskId}` : undefined,
@@ -141,7 +129,7 @@ export default function Command() {
       popToRoot();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      showToast({
+      await showToast({
         style: Toast.Style.Failure,
         title: "Failed to create task",
         message: message.split("\n")[0],

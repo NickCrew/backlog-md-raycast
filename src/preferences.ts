@@ -3,11 +3,6 @@ import { useCachedState } from "@raycast/utils";
 import { basename, resolve } from "path";
 import { homedir } from "os";
 
-interface RawPreferences {
-  projectDirectories: string;
-  backlogPath: string;
-}
-
 export interface ProjectConfig {
   backlogPath: string;
   projects: { name: string; path: string }[];
@@ -22,7 +17,7 @@ function expandPath(p: string): string {
 }
 
 export function getProjectConfig(): ProjectConfig {
-  const prefs = getPreferenceValues<RawPreferences>();
+  const prefs = getPreferenceValues<Preferences>();
   const backlogPath = prefs.backlogPath ? expandPath(prefs.backlogPath) : "backlog";
 
   const projects = prefs.projectDirectories
