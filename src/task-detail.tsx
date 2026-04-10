@@ -12,13 +12,17 @@ export interface TaskData {
   labels: string[];
   milestone: string;
   assignee: string;
+  parent: string;
+  subtasks: string[];
   description: string;
   acceptanceCriteria: string[];
   definitionOfDone: string[];
+  implementationPlan: string;
   dependencies: string[];
   references: string[];
   documentation: string[];
   notes: string;
+  finalSummary: string;
   filePath: string;
 }
 
@@ -45,13 +49,17 @@ export function parseTaskView(output: string): TaskData {
     labels: [],
     milestone: "",
     assignee: "",
+    parent: "",
+    subtasks: [],
     description: "",
     acceptanceCriteria: [],
     definitionOfDone: [],
+    implementationPlan: "",
     dependencies: [],
     references: [],
     documentation: [],
     notes: "",
+    finalSummary: "",
     filePath: "",
   };
 
@@ -90,8 +98,16 @@ export function parseTaskView(output: string): TaskData {
       currentSection = "dod";
       continue;
     }
+    if (trimmed === "Implementation Plan:") {
+      currentSection = "plan";
+      continue;
+    }
     if (trimmed === "Implementation Notes:") {
       currentSection = "notes";
+      continue;
+    }
+    if (trimmed === "Final Summary:") {
+      currentSection = "finalSummary";
       continue;
     }
     if (trimmed === "Dependencies:") {
@@ -139,15 +155,51 @@ export function parseTaskView(output: string): TaskData {
       task.assignee = trimmed.replace("Assignee:", "").trim();
       continue;
     }
+    if (!currentSection && trimmed.startsWith("Parent:")) {
+      task.parent = trimmed.replace("Parent:", "").trim();
+      continue;
+    }
+    if (trimmed === "Subtasks:" || /^Subtasks\s*\(\d+\):$/.test(trimmed)) {
+      currentSection = "subtasks";
+      continue;
+    }
+    if (!currentSection && trimmed.startsWith("Dependencies:")) {
+      task.dependencies = trimmed
+        .replace("Dependencies:", "")
+        .trim()
+        .split(",")
+        .map((dep) => dep.trim())
+        .filter(Boolean);
+      continue;
+    }
+    if (!currentSection && trimmed.startsWith("References:")) {
+      const reference = trimmed.replace("References:", "").trim();
+      task.references = reference ? [reference] : [];
+      continue;
+    }
+    if (!currentSection && trimmed.startsWith("Documentation:")) {
+      const documentation = trimmed.replace("Documentation:", "").trim();
+      task.documentation = documentation ? [documentation] : [];
+      continue;
+    }
 
     if (currentSection === "description" && trimmed) {
       task.description += (task.description ? "\n" : "") + trimmed;
     }
+    if (currentSection === "plan" && trimmed) {
+      task.implementationPlan += (task.implementationPlan ? "\n" : "") + trimmed;
+    }
     if (currentSection === "notes" && trimmed) {
       task.notes += (task.notes ? "\n" : "") + trimmed;
     }
+    if (currentSection === "finalSummary" && trimmed) {
+      task.finalSummary += (task.finalSummary ? "\n" : "") + trimmed;
+    }
     if ((currentSection === "ac" || currentSection === "dod") && trimmed.startsWith("- [")) {
       (currentSection === "ac" ? task.acceptanceCriteria : task.definitionOfDone).push(trimmed);
+    }
+    if (currentSection === "subtasks" && trimmed.startsWith("-")) {
+      task.subtasks.push(trimmed.replace(/^-\s*/, ""));
     }
     if (currentSection === "dependencies" && trimmed.startsWith("-")) {
       task.dependencies.push(trimmed.replace(/^-\s*/, ""));
@@ -184,9 +236,19 @@ function buildMarkdown(task: TaskData): string {
     parts.push("");
   }
 
+  if (task.implementationPlan) {
+    parts.push("## Implementation Plan\n");
+    parts.push(task.implementationPlan + "\n");
+  }
+
   if (task.notes) {
-    parts.push("## Notes\n");
+    parts.push("## Implementation Notes\n");
     parts.push(task.notes + "\n");
+  }
+
+  if (task.finalSummary) {
+    parts.push("## Final Summary\n");
+    parts.push(task.finalSummary + "\n");
   }
 
   if (task.references.length > 0) {
@@ -198,6 +260,12 @@ function buildMarkdown(task: TaskData): string {
   if (task.documentation.length > 0) {
     parts.push("## Documentation\n");
     for (const doc of task.documentation) parts.push(`- ${doc}`);
+    parts.push("");
+  }
+
+  if (task.subtasks.length > 0) {
+    parts.push("## Subtasks\n");
+    for (const subtask of task.subtasks) parts.push(`- ${subtask}`);
     parts.push("");
   }
 
@@ -259,6 +327,7 @@ export default function TaskDetail({
               text={task.priority || "none"}
               icon={{ source: Icon.Signal3, tintColor: PRIORITY_COLORS[task.priority] || Color.SecondaryText }}
             />
+            {task.parent ? <Detail.Metadata.Label title="Parent" text={task.parent} /> : null}
             {task.assignee ? <Detail.Metadata.Label title="Assignee" text={task.assignee} /> : null}
             {task.milestone ? <Detail.Metadata.Label title="Milestone" text={task.milestone} /> : null}
             {task.created ? <Detail.Metadata.Label title="Created" text={task.created} /> : null}
