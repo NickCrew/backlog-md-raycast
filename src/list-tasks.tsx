@@ -3,14 +3,7 @@ import { usePromise } from "@raycast/utils";
 import { useState } from "react";
 import TaskDetail, { setTaskStatus } from "./task-detail";
 import { useActiveProject } from "./preferences";
-import { runBacklog } from "./backlog";
-
-interface Task {
-  id: string;
-  title: string;
-  priority: string;
-  status: string;
-}
+import { BacklogTaskSummary, listTaskSummaries } from "./backlog";
 
 const STATUS_ICONS: Record<string, { icon: Icon; color: Color }> = {
   "to do": { icon: Icon.Circle, color: Color.SecondaryText },
@@ -28,33 +21,12 @@ const PRIORITY_TAGS: Record<string, Color> = {
 const FILTER_OPTIONS = ["All", "To Do", "In Progress", "Done", "Blocked"];
 const PRIORITY_FILTERS = ["All", "High", "Medium", "Low"];
 
-function parseTaskList(output: string): Record<string, Task[]> {
-  const sections: Record<string, Task[]> = {};
-  let currentStatus = "";
-
-  for (const line of output.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-
-    if (trimmed.endsWith(":") && !trimmed.startsWith("[")) {
-      currentStatus = trimmed.slice(0, -1);
-      sections[currentStatus] = [];
-      continue;
-    }
-
-    const match = trimmed.match(/^\[(\w+)\]\s+([\w-]+)\s+-\s+(.+)$/);
-    if (match && currentStatus) {
-      sections[currentStatus] = sections[currentStatus] || [];
-      sections[currentStatus].push({
-        priority: match[1].toLowerCase(),
-        id: match[2],
-        title: match[3],
-        status: currentStatus,
-      });
-    }
-  }
-
-  return sections;
+function groupTasksByStatus(tasks: BacklogTaskSummary[]): Record<string, BacklogTaskSummary[]> {
+  return tasks.reduce<Record<string, BacklogTaskSummary[]>>((sections, task) => {
+    sections[task.status] = sections[task.status] || [];
+    sections[task.status].push(task);
+    return sections;
+  }, {});
 }
 
 export default function Command() {
@@ -65,12 +37,8 @@ export default function Command() {
 
   const { isLoading, data, revalidate } = usePromise(
     async (cwd: string, status: string, priority: string) => {
-      const args = ["task", "list", "--plain"];
-      if (status !== "All") args.push("--status", status);
-      if (priority !== "All") args.push("--priority", priority.toLowerCase());
-
-      const stdout = await runBacklog(args, cwd);
-      return parseTaskList(stdout);
+      const tasks = await listTaskSummaries(cwd, { status, priority });
+      return groupTasksByStatus(tasks);
     },
     [activeProject, statusFilter, priorityFilter],
     {

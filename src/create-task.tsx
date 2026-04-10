@@ -1,7 +1,8 @@
 import { Form, ActionPanel, Action, showToast, Toast, popToRoot, Icon } from "@raycast/api";
+import { usePromise } from "@raycast/utils";
 import { existsSync } from "fs";
-import { useState } from "react";
-import { runBacklog } from "./backlog";
+import { useEffect, useState } from "react";
+import { BacklogTaskSummary, listTaskSummaries, runBacklog } from "./backlog";
 import { useActiveProject } from "./preferences";
 
 const PRIORITIES = [
@@ -11,9 +12,31 @@ const PRIORITIES = [
   { title: "Low", value: "low" },
 ];
 
+interface CreateTaskValues extends Record<string, unknown> {
+  title: string;
+  description?: string;
+  priority?: string;
+  labels?: string;
+  assignee?: string;
+  isDraft?: boolean;
+  parent?: string;
+  dependsOn?: string[];
+  notes?: string;
+  attachments?: string[];
+  noDodDefaults?: boolean;
+}
+
+function formatTaskOption(task: BacklogTaskSummary): string {
+  const priority = task.priority !== "none" ? task.priority[0].toUpperCase() + task.priority.slice(1) : undefined;
+  const details = [task.status, priority].filter(Boolean).join(" · ");
+  return details ? `${task.id} - ${task.title} (${details})` : `${task.id} - ${task.title}`;
+}
+
 export default function Command() {
   const [titleError, setTitleError] = useState<string | undefined>();
   const [activeProject, setActiveProject, config] = useActiveProject();
+  const [parentTaskId, setParentTaskId] = useState("");
+  const [dependencyTaskIds, setDependencyTaskIds] = useState<string[]>([]);
 
   // Dynamic list fields
   const [acItems, setAcItems] = useState<string[]>([""]);
@@ -21,8 +44,30 @@ export default function Command() {
   const [refItems, setRefItems] = useState<string[]>([""]);
   const [docItems, setDocItems] = useState<string[]>([""]);
 
-  async function handleSubmit(values: Record<string, unknown>) {
-    const title = (values.title as string).trim();
+  const { isLoading: isLoadingTasks, data: availableTasks = [] } = usePromise(
+    async (cwd: string) => {
+      return listTaskSummaries(cwd);
+    },
+    [activeProject],
+    {
+      execute: !!activeProject,
+      onError: (error) => {
+        showToast({
+          style: Toast.Style.Failure,
+          title: "Failed to load task options",
+          message: error.message,
+        });
+      },
+    },
+  );
+
+  useEffect(() => {
+    setParentTaskId("");
+    setDependencyTaskIds([]);
+  }, [activeProject]);
+
+  async function handleSubmit(values: CreateTaskValues) {
+    const title = values.title.trim();
     if (!title) {
       setTitleError("Title is required");
       return;
@@ -60,15 +105,15 @@ export default function Command() {
     }
 
     // Parent task
-    const parent = (values.parent as string)?.trim();
+    const parent = values.parent?.trim();
     if (parent) {
       args.push("--parent", parent);
     }
 
     // Dependencies
-    const dependsOn = (values.dependsOn as string)?.trim();
-    if (dependsOn) {
-      args.push("--depends-on", dependsOn);
+    const dependsOn = values.dependsOn || [];
+    if (dependsOn.length > 0) {
+      args.push("--depends-on", dependsOn.join(","));
     }
 
     // Notes
@@ -236,13 +281,36 @@ export default function Command() {
       <Form.Separator />
 
       {/* ── Relationships ── */}
-      <Form.TextField id="parent" title="Parent Task" placeholder="e.g. task-42" info="Parent task ID" />
-      <Form.TextField
+      <Form.Dropdown
+        id="parent"
+        title="Parent Task"
+        value={parentTaskId}
+        onChange={setParentTaskId}
+        placeholder={isLoadingTasks ? "Loading tasks..." : "Search tasks..."}
+        info="Optional parent task"
+      >
+        <Form.Dropdown.Item value="" title={isLoadingTasks ? "Loading tasks..." : "No parent"} />
+        {availableTasks.map((task) => (
+          <Form.Dropdown.Item
+            key={task.id}
+            value={task.id}
+            title={formatTaskOption(task)}
+            keywords={[task.id, task.title, task.status, task.priority]}
+          />
+        ))}
+      </Form.Dropdown>
+      <Form.TagPicker
         id="dependsOn"
         title="Depends On"
-        placeholder="task-1, task-2"
-        info="Comma-separated task IDs this task depends on"
-      />
+        value={dependencyTaskIds}
+        onChange={setDependencyTaskIds}
+        placeholder={isLoadingTasks ? "Loading tasks..." : "Select task dependencies"}
+        info="Select one or more prerequisite tasks"
+      >
+        {availableTasks.map((task) => (
+          <Form.TagPicker.Item key={task.id} value={task.id} title={formatTaskOption(task)} />
+        ))}
+      </Form.TagPicker>
 
       <Form.Separator />
 
