@@ -1,4 +1,4 @@
-import { Form, ActionPanel, Action, showToast, Toast, popToRoot, Icon } from "@raycast/api";
+import { Form, ActionPanel, Action, List, showToast, Toast, popToRoot, Icon, useNavigation } from "@raycast/api";
 import { usePromise } from "@raycast/utils";
 import { existsSync } from "fs";
 import { useEffect, useState } from "react";
@@ -20,54 +20,119 @@ interface CreateTaskValues extends Record<string, unknown> {
   assignee?: string;
   isDraft?: boolean;
   parent?: string;
-  dependsOn?: string[];
+  dependsOn?: string;
+  plan?: string;
   notes?: string;
-  attachments?: string[];
+  finalSummary?: string;
+  references?: string[];
+  documents?: string[];
   noDodDefaults?: boolean;
 }
 
 function formatTaskOption(task: BacklogTaskSummary): string {
-  const priority = task.priority !== "none" ? task.priority[0].toUpperCase() + task.priority.slice(1) : undefined;
+  const priority =
+    task.priority && task.priority !== "none" ? task.priority[0].toUpperCase() + task.priority.slice(1) : undefined;
   const details = [task.status, priority].filter(Boolean).join(" · ");
   return details ? `${task.id} - ${task.title} (${details})` : `${task.id} - ${task.title}`;
+}
+
+function TaskPicker({
+  projectDir,
+  navigationTitle,
+  actionTitle,
+  onSelect,
+  excludedTaskIds = [],
+}: {
+  projectDir: string;
+  navigationTitle: string;
+  actionTitle: string;
+  onSelect: (task: BacklogTaskSummary) => void;
+  excludedTaskIds?: string[];
+}) {
+  const { pop } = useNavigation();
+  const [searchText, setSearchText] = useState("");
+  const { isLoading, data = [] } = usePromise(async (cwd: string) => listTaskSummaries(cwd), [projectDir], {
+    execute: !!projectDir,
+    onError: (error) => {
+      showToast({
+        style: Toast.Style.Failure,
+        title: "Failed to load tasks",
+        message: error.message,
+      });
+    },
+  });
+
+  const excluded = new Set(excludedTaskIds);
+  const normalizedSearch = searchText.trim().toLowerCase();
+  const tasks = data.filter((task) => {
+    if (excluded.has(task.id)) return false;
+    if (!normalizedSearch) return true;
+
+    return [task.id, task.title, task.status, task.priority].some((value) =>
+      value?.toLowerCase().includes(normalizedSearch),
+    );
+  });
+
+  return (
+    <List
+      isLoading={isLoading}
+      navigationTitle={navigationTitle}
+      searchBarPlaceholder="Search tasks..."
+      filtering={false}
+      onSearchTextChange={setSearchText}
+      throttle
+    >
+      {tasks.map((task) => (
+        <List.Item
+          key={task.id}
+          title={task.title}
+          subtitle={task.id}
+          accessories={[
+            { text: task.status },
+            ...(task.priority && task.priority !== "none" ? [{ text: task.priority }] : []),
+          ]}
+          actions={
+            <ActionPanel>
+              <Action
+                title={actionTitle}
+                onAction={() => {
+                  onSelect(task);
+                  pop();
+                }}
+              />
+            </ActionPanel>
+          }
+        />
+      ))}
+    </List>
+  );
 }
 
 export default function Command() {
   const [titleError, setTitleError] = useState<string | undefined>();
   const [activeProject, setActiveProject, config] = useActiveProject();
-  const [parentTaskId, setParentTaskId] = useState("");
-  const [dependencyTaskIds, setDependencyTaskIds] = useState<string[]>([]);
+  const [parentTask, setParentTask] = useState<BacklogTaskSummary | undefined>();
+  const [dependencyTasks, setDependencyTasks] = useState<BacklogTaskSummary[]>([]);
+  const [manualParentId, setManualParentId] = useState("");
+  const [manualDependencyIds, setManualDependencyIds] = useState("");
+  const [referenceFiles, setReferenceFiles] = useState<string[]>([]);
+  const [documentFiles, setDocumentFiles] = useState<string[]>([]);
 
   // Dynamic list fields
   const [acItems, setAcItems] = useState<string[]>([""]);
   const [dodItems, setDodItems] = useState<string[]>([]);
-  const [refItems, setRefItems] = useState<string[]>([""]);
-  const [docItems, setDocItems] = useState<string[]>([""]);
-
-  const { isLoading: isLoadingTasks, data: availableTasks = [] } = usePromise(
-    async (cwd: string) => {
-      return listTaskSummaries(cwd);
-    },
-    [activeProject],
-    {
-      execute: !!activeProject,
-      onError: (error) => {
-        showToast({
-          style: Toast.Style.Failure,
-          title: "Failed to load task options",
-          message: error.message,
-        });
-      },
-    },
-  );
 
   useEffect(() => {
-    setParentTaskId("");
-    setDependencyTaskIds([]);
+    setParentTask(undefined);
+    setDependencyTasks([]);
+    setManualParentId("");
+    setManualDependencyIds("");
+    setReferenceFiles([]);
+    setDocumentFiles([]);
   }, [activeProject]);
 
   async function handleSubmit(values: CreateTaskValues) {
-    const title = values.title.trim();
+    const title = (values.title || "").trim();
     if (!title) {
       setTitleError("Title is required");
       return;
@@ -105,21 +170,38 @@ export default function Command() {
     }
 
     // Parent task
-    const parent = values.parent?.trim();
-    if (parent) {
-      args.push("--parent", parent);
+    const parentId = values.parent?.trim() || parentTask?.id;
+    if (parentId) {
+      args.push("--parent", parentId);
     }
 
     // Dependencies
-    const dependsOn = values.dependsOn || [];
+    const dependsOn = Array.from(
+      new Set([
+        ...dependencyTasks.map((task) => task.id),
+        ...(values.dependsOn || "")
+          .split(",")
+          .map((value) => value.trim())
+          .filter(Boolean),
+      ]),
+    );
     if (dependsOn.length > 0) {
       args.push("--depends-on", dependsOn.join(","));
     }
 
-    // Notes
+    const plan = (values.plan as string)?.trim();
+    if (plan) {
+      args.push("--plan", plan);
+    }
+
     const notes = (values.notes as string)?.trim();
     if (notes) {
       args.push("--notes", notes);
+    }
+
+    const finalSummary = (values.finalSummary as string)?.trim();
+    if (finalSummary) {
+      args.push("--final-summary", finalSummary);
     }
 
     // Acceptance criteria (multiple --ac flags)
@@ -137,22 +219,14 @@ export default function Command() {
       if (val) args.push("--dod", val);
     }
 
-    // References (multiple --ref flags) - from text fields
-    for (let i = 0; i < refItems.length; i++) {
-      const val = (values[`ref-${i}`] as string)?.trim();
-      if (val) args.push("--ref", val);
-    }
-
-    // Docs (multiple --doc flags)
-    for (let i = 0; i < docItems.length; i++) {
-      const val = (values[`doc-${i}`] as string)?.trim();
-      if (val) args.push("--doc", val);
-    }
-
-    // File attachments via FilePicker → --ref
-    const attachments = ((values.attachments as string[]) || []).filter((f) => existsSync(f));
-    for (const file of attachments) {
+    const references = ((values.references as string[]) || []).filter((file) => existsSync(file));
+    for (const file of references) {
       args.push("--ref", file);
+    }
+
+    const documents = ((values.documents as string[]) || []).filter((file) => existsSync(file));
+    for (const file of documents) {
+      args.push("--doc", file);
     }
 
     args.push("--plain");
@@ -188,6 +262,36 @@ export default function Command() {
         <ActionPanel>
           <Action.SubmitForm title="Create Task" onSubmit={handleSubmit} />
           <ActionPanel.Section title="Add Fields">
+            <Action.Push
+              title={parentTask ? "Change Parent Task" : "Select Parent Task"}
+              icon={Icon.List}
+              target={
+                <TaskPicker
+                  projectDir={activeProject}
+                  navigationTitle="Select Parent Task"
+                  actionTitle="Use as Parent Task"
+                  excludedTaskIds={dependencyTasks.map((task) => task.id)}
+                  onSelect={(task) => {
+                    setParentTask(task);
+                    setManualParentId("");
+                  }}
+                />
+              }
+            />
+            <Action.Push
+              title="Add Dependency"
+              icon={Icon.Plus}
+              shortcut={{ modifiers: ["cmd", "shift"], key: "p" }}
+              target={
+                <TaskPicker
+                  projectDir={activeProject}
+                  navigationTitle="Add Dependency"
+                  actionTitle="Add Dependency"
+                  excludedTaskIds={[...(parentTask ? [parentTask.id] : []), ...dependencyTasks.map((task) => task.id)]}
+                  onSelect={(task) => setDependencyTasks((current) => [...current, task])}
+                />
+              }
+            />
             <Action
               title="Add Acceptance Criterion"
               icon={Icon.Plus}
@@ -200,20 +304,25 @@ export default function Command() {
               shortcut={{ modifiers: ["cmd"], key: "d" }}
               onAction={() => setDodItems([...dodItems, ""])}
             />
-            <Action
-              title="Add Reference"
-              icon={Icon.Plus}
-              shortcut={{ modifiers: ["cmd"], key: "r" }}
-              onAction={() => setRefItems([...refItems, ""])}
-            />
-            <Action
-              title="Add Documentation Link"
-              icon={Icon.Plus}
-              shortcut={{ modifiers: ["cmd", "shift"], key: "d" }}
-              onAction={() => setDocItems([...docItems, ""])}
-            />
           </ActionPanel.Section>
           <ActionPanel.Section title="Remove Fields">
+            {parentTask ? (
+              <Action
+                title="Clear Parent Task"
+                icon={Icon.Minus}
+                style={Action.Style.Destructive}
+                onAction={() => setParentTask(undefined)}
+              />
+            ) : null}
+            {dependencyTasks.length > 0 ? (
+              <Action
+                title="Remove Last Dependency"
+                icon={Icon.Minus}
+                style={Action.Style.Destructive}
+                shortcut={{ modifiers: ["opt", "shift"], key: "p" }}
+                onAction={() => setDependencyTasks((current) => current.slice(0, -1))}
+              />
+            ) : null}
             <Action
               title="Remove Last Acceptance Criterion"
               icon={Icon.Minus}
@@ -227,20 +336,6 @@ export default function Command() {
               style={Action.Style.Destructive}
               shortcut={{ modifiers: ["opt", "shift"], key: "d" }}
               onAction={() => dodItems.length > 0 && setDodItems(dodItems.slice(0, -1))}
-            />
-            <Action
-              title="Remove Last Reference"
-              icon={Icon.Minus}
-              style={Action.Style.Destructive}
-              shortcut={{ modifiers: ["cmd", "shift"], key: "r" }}
-              onAction={() => refItems.length > 1 && setRefItems(refItems.slice(0, -1))}
-            />
-            <Action
-              title="Remove Last Documentation Link"
-              icon={Icon.Minus}
-              style={Action.Style.Destructive}
-              shortcut={{ modifiers: ["opt"], key: "d" }}
-              onAction={() => docItems.length > 1 && setDocItems(docItems.slice(0, -1))}
             />
           </ActionPanel.Section>
         </ActionPanel>
@@ -281,36 +376,39 @@ export default function Command() {
       <Form.Separator />
 
       {/* ── Relationships ── */}
-      <Form.Dropdown
-        id="parent"
+      <Form.Description
         title="Parent Task"
-        value={parentTaskId}
-        onChange={setParentTaskId}
-        placeholder={isLoadingTasks ? "Loading tasks..." : "Search tasks..."}
-        info="Optional parent task"
-      >
-        <Form.Dropdown.Item value="" title={isLoadingTasks ? "Loading tasks..." : "No parent"} />
-        {availableTasks.map((task) => (
-          <Form.Dropdown.Item
-            key={task.id}
-            value={task.id}
-            title={formatTaskOption(task)}
-            keywords={[task.id, task.title, task.status, task.priority]}
-          />
-        ))}
-      </Form.Dropdown>
-      <Form.TagPicker
-        id="dependsOn"
+        text={
+          parentTask ? formatTaskOption(parentTask) : "None selected. Use Select Parent Task from the actions menu."
+        }
+      />
+      <Form.TextField
+        id="parent"
+        title="Parent Task ID"
+        value={manualParentId}
+        onChange={(value) => {
+          setManualParentId(value);
+          if (value.trim()) {
+            setParentTask(undefined);
+          }
+        }}
+        placeholder="Optional manual fallback, e.g. task-42"
+      />
+      <Form.Description
         title="Depends On"
-        value={dependencyTaskIds}
-        onChange={setDependencyTaskIds}
-        placeholder={isLoadingTasks ? "Loading tasks..." : "Select task dependencies"}
-        info="Select one or more prerequisite tasks"
-      >
-        {availableTasks.map((task) => (
-          <Form.TagPicker.Item key={task.id} value={task.id} title={formatTaskOption(task)} />
-        ))}
-      </Form.TagPicker>
+        text={
+          dependencyTasks.length > 0
+            ? dependencyTasks.map((task) => `- ${formatTaskOption(task)}`).join("\n")
+            : "None selected. Use Add Dependency from the actions menu."
+        }
+      />
+      <Form.TextField
+        id="dependsOn"
+        title="Dependency IDs"
+        value={manualDependencyIds}
+        onChange={setManualDependencyIds}
+        placeholder="Optional manual fallback, e.g. task-1, task-2"
+      />
 
       <Form.Separator />
 
@@ -329,32 +427,55 @@ export default function Command() {
 
       <Form.Separator />
 
-      {/* ── Notes ── */}
-      <Form.TextArea id="notes" title="Notes" placeholder="Implementation notes..." />
+      {/* ── Plan & Summary ── */}
+      <Form.TextArea id="plan" title="Plan" placeholder="Implementation plan..." />
+      <Form.TextArea id="notes" title="Implementation Notes" placeholder="Implementation notes..." />
+      <Form.TextArea
+        id="finalSummary"
+        title="Final Summary"
+        placeholder="What should be true when this task is done?"
+      />
 
       <Form.Separator />
 
-      {/* ── References (dynamic) ── */}
-      <Form.Description text="References  ⌘R to add" />
-      {refItems.map((_, i) => (
-        <Form.TextField key={`ref-${i}`} id={`ref-${i}`} title={`Ref ${i + 1}`} placeholder="URL or file path" />
-      ))}
-
-      {/* ── Documentation (dynamic) ── */}
-      <Form.Description text="Documentation  ⇧⌘D to add" />
-      {docItems.map((_, i) => (
-        <Form.TextField key={`doc-${i}`} id={`doc-${i}`} title={`Doc ${i + 1}`} placeholder="URL or file path" />
-      ))}
-
-      <Form.Separator />
-
-      {/* ── File Attachments ── */}
+      {/* ── References ── */}
       <Form.FilePicker
-        id="attachments"
-        title="Attachments"
+        id="references"
+        title="References"
+        value={referenceFiles}
+        onChange={setReferenceFiles}
         allowMultipleSelection
         canChooseDirectories={false}
-        info="Drag and drop screenshots or files — added as --ref"
+        info="Files added here are submitted as --ref"
+      />
+      <Form.Description
+        title="Selected References"
+        text={
+          referenceFiles.length > 0
+            ? referenceFiles.map((file) => `- \`${file}\``).join("\n")
+            : "No references selected yet."
+        }
+      />
+
+      <Form.Separator />
+
+      {/* ── Documents ── */}
+      <Form.FilePicker
+        id="documents"
+        title="Documents"
+        value={documentFiles}
+        onChange={setDocumentFiles}
+        allowMultipleSelection
+        canChooseDirectories={false}
+        info="Files added here are submitted as --doc"
+      />
+      <Form.Description
+        title="Selected Documents"
+        text={
+          documentFiles.length > 0
+            ? documentFiles.map((file) => `- \`${file}\``).join("\n")
+            : "No documents selected yet."
+        }
       />
     </Form>
   );
