@@ -1,6 +1,7 @@
 import { Form, ActionPanel, Action, List, showToast, Toast, popToRoot, Icon, useNavigation } from "@raycast/api";
 import { usePromise } from "@raycast/utils";
 import { existsSync } from "fs";
+import { relative } from "path";
 import { useEffect, useState } from "react";
 import { BacklogTaskSummary, listTaskSummaries, runBacklog } from "./backlog";
 import { useActiveProject } from "./preferences";
@@ -34,6 +35,11 @@ function formatTaskOption(task: BacklogTaskSummary): string {
     task.priority && task.priority !== "none" ? task.priority[0].toUpperCase() + task.priority.slice(1) : undefined;
   const details = [task.status, priority].filter(Boolean).join(" · ");
   return details ? `${task.id} - ${task.title} (${details})` : `${task.id} - ${task.title}`;
+}
+
+function toProjectRelativePath(projectDir: string, filePath: string): string {
+  const relativePath = relative(projectDir, filePath);
+  return relativePath || ".";
 }
 
 function TaskPicker({
@@ -219,12 +225,16 @@ export default function Command() {
       if (val) args.push("--dod", val);
     }
 
-    const references = ((values.references as string[]) || []).filter((file) => existsSync(file));
+    const references = ((values.references as string[]) || [])
+      .filter((file) => existsSync(file))
+      .map((file) => toProjectRelativePath(activeProject, file));
     for (const file of references) {
       args.push("--ref", file);
     }
 
-    const documents = ((values.documents as string[]) || []).filter((file) => existsSync(file));
+    const documents = ((values.documents as string[]) || [])
+      .filter((file) => existsSync(file))
+      .map((file) => toProjectRelativePath(activeProject, file));
     for (const file of documents) {
       args.push("--doc", file);
     }
@@ -446,13 +456,13 @@ export default function Command() {
         onChange={setReferenceFiles}
         allowMultipleSelection
         canChooseDirectories={false}
-        info="Files added here are submitted as --ref"
+        info="Raycast chooses the picker folder; selected files are submitted as project-relative --ref paths"
       />
       <Form.Description
         title="Selected References"
         text={
           referenceFiles.length > 0
-            ? referenceFiles.map((file) => `- \`${file}\``).join("\n")
+            ? referenceFiles.map((file) => `- \`${toProjectRelativePath(activeProject, file)}\``).join("\n")
             : "No references selected yet."
         }
       />
@@ -467,13 +477,13 @@ export default function Command() {
         onChange={setDocumentFiles}
         allowMultipleSelection
         canChooseDirectories={false}
-        info="Files added here are submitted as --doc"
+        info="Raycast chooses the picker folder; selected files are submitted as project-relative --doc paths"
       />
       <Form.Description
         title="Selected Documents"
         text={
           documentFiles.length > 0
-            ? documentFiles.map((file) => `- \`${file}\``).join("\n")
+            ? documentFiles.map((file) => `- \`${toProjectRelativePath(activeProject, file)}\``).join("\n")
             : "No documents selected yet."
         }
       />
