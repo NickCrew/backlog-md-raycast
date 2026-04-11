@@ -1,17 +1,8 @@
 import { Form, ActionPanel, Action, showToast, Toast, Icon, useNavigation } from "@raycast/api";
+import { usePromise } from "@raycast/utils";
 import { useState } from "react";
+import { loadTask, TaskData } from "./task-data";
 import { runBacklog } from "./backlog";
-
-interface TaskData {
-  id: string;
-  title: string;
-  status: string;
-  priority: string;
-  labels: string[];
-  assignee: string;
-  description: string;
-  notes: string;
-}
 
 const PRIORITIES = [
   { title: "None", value: "" },
@@ -42,6 +33,7 @@ export default function EditTask({
   async function handleSubmit(values: Record<string, string>) {
     setIsSubmitting(true);
     const args: string[] = ["task", "edit", task.id];
+    const baseLength = args.length;
 
     const title = values.title?.trim();
     if (title && title !== task.title) {
@@ -75,12 +67,22 @@ export default function EditTask({
     }
 
     const notes = values.notes?.trim();
-    if (notes && notes !== (task.notes || "")) {
-      args.push("--notes", notes);
+    if (notes !== (task.notes || "")) {
+      args.push("--notes", notes || "");
+    }
+
+    const plan = values.plan?.trim();
+    if (plan !== (task.implementationPlan || "")) {
+      args.push("--plan", plan || "");
+    }
+
+    const finalSummary = values.finalSummary?.trim();
+    if (finalSummary !== (task.finalSummary || "")) {
+      args.push("--final-summary", finalSummary || "");
     }
 
     // Only submit if there are actual changes
-    if (args.length <= 3) {
+    if (args.length === baseLength) {
       showToast({ style: Toast.Style.Success, title: "No changes to save" });
       setIsSubmitting(false);
       return;
@@ -128,7 +130,59 @@ export default function EditTask({
       <Form.TextField id="labels" title="Labels" defaultValue={task.labels.join(", ")} />
       <Form.TextField id="assignee" title="Assignee" defaultValue={task.assignee} />
       <Form.Separator />
-      <Form.TextArea id="notes" title="Notes" defaultValue={task.notes} info="Replaces existing notes" />
+      <Form.TextArea id="plan" title="Plan" defaultValue={task.implementationPlan} info="Replaces existing plan" />
+      <Form.TextArea id="notes" title="Implementation Notes" defaultValue={task.notes} info="Replaces existing notes" />
+      <Form.TextArea
+        id="finalSummary"
+        title="Final Summary"
+        defaultValue={task.finalSummary}
+        info="Replaces existing summary"
+      />
     </Form>
   );
+}
+
+export function EditTaskLoader({
+  taskId,
+  projectDir,
+  onComplete,
+}: {
+  taskId: string;
+  projectDir: string;
+  onComplete?: () => void;
+}) {
+  const { isLoading, data, error, revalidate } = usePromise(
+    async (id: string, cwd: string) => loadTask(id, cwd),
+    [taskId, projectDir],
+    {
+      onError: (error) => {
+        showToast({ style: Toast.Style.Failure, title: "Failed to load task", message: error.message });
+      },
+    },
+  );
+
+  if (error) {
+    return (
+      <Form
+        navigationTitle={`Edit ${taskId}`}
+        actions={
+          <ActionPanel>
+            <Action title="Retry" icon={Icon.ArrowClockwise} onAction={revalidate} />
+          </ActionPanel>
+        }
+      >
+        <Form.Description title="Unable to Load Task" text={error.message} />
+      </Form>
+    );
+  }
+
+  if (isLoading || !data) {
+    return (
+      <Form isLoading={isLoading} navigationTitle={`Edit ${taskId}`}>
+        <Form.Description title="Loading" text="Loading task details..." />
+      </Form>
+    );
+  }
+
+  return <EditTask task={data} projectDir={projectDir} onComplete={onComplete} />;
 }

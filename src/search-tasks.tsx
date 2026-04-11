@@ -1,6 +1,7 @@
 import { List, ActionPanel, Action, Icon, Color, showToast, Toast } from "@raycast/api";
 import { usePromise } from "@raycast/utils";
 import { useState } from "react";
+import { EditTaskLoader } from "./edit-task";
 import TaskDetail from "./task-detail";
 import { useActiveProject } from "./preferences";
 import { runBacklog } from "./backlog";
@@ -115,6 +116,12 @@ export default function Command() {
                   title="View Details"
                   icon={Icon.Eye}
                   target={<TaskDetail taskId={result.id} projectDir={activeProject} onRefresh={revalidate} />}
+                />
+                <Action.Push
+                  title="Edit Task"
+                  icon={Icon.Pencil}
+                  shortcut={{ modifiers: ["cmd"], key: "e" }}
+                  target={<EditTaskLoader taskId={result.id} projectDir={activeProject} onComplete={revalidate} />}
                 />
                 <Action.CopyToClipboard title="Copy Task ID" content={result.id} />
               </ActionPanel>
