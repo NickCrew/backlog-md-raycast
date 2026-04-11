@@ -2,6 +2,8 @@ import { Detail, ActionPanel, Action, Icon, Color, showToast, Toast } from "@ray
 import { usePromise } from "@raycast/utils";
 import { runBacklog } from "./backlog";
 import EditTask from "./edit-task";
+import { OpenBrowserAction } from "./open-browser";
+import { getProjectConfig, getProjectName } from "./preferences";
 import { loadTask, TaskData } from "./task-data";
 
 const PRIORITY_COLORS: Record<string, Color> = {
@@ -94,6 +96,7 @@ export default function TaskDetail({
   projectDir: string;
   onRefresh?: () => void;
 }) {
+  const projectName = getProjectName(getProjectConfig(), projectDir);
   const { isLoading, data, revalidate } = usePromise(
     async (id: string, cwd: string) => {
       return loadTask(id, cwd);
@@ -162,6 +165,7 @@ export default function TaskDetail({
               target={<EditTask task={task} projectDir={projectDir} onComplete={refresh} />}
             />
           )}
+          <OpenBrowserAction projectDir={projectDir} projectName={projectName} />
           {task?.filePath && <Action.Open title="Open Task File" target={task.filePath} icon={Icon.Document} />}
           <Action.CopyToClipboard title="Copy Task ID" content={taskId} />
           <Action

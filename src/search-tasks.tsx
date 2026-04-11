@@ -2,8 +2,9 @@ import { List, ActionPanel, Action, Icon, Color, showToast, Toast } from "@rayca
 import { usePromise } from "@raycast/utils";
 import { useState } from "react";
 import { EditTaskLoader } from "./edit-task";
+import { OpenBrowserAction } from "./open-browser";
 import TaskDetail from "./task-detail";
-import { useActiveProject } from "./preferences";
+import { getProjectName, useActiveProject } from "./preferences";
 import { runBacklog } from "./backlog";
 
 interface SearchResult {
@@ -80,6 +81,7 @@ export default function Command() {
   );
 
   const results = data || [];
+  const projectName = getProjectName(config, activeProject);
 
   return (
     <List
@@ -123,6 +125,7 @@ export default function Command() {
                   shortcut={{ modifiers: ["cmd"], key: "e" }}
                   target={<EditTaskLoader taskId={result.id} projectDir={activeProject} onComplete={revalidate} />}
                 />
+                <OpenBrowserAction projectDir={activeProject} projectName={projectName} />
                 <Action.CopyToClipboard title="Copy Task ID" content={result.id} />
               </ActionPanel>
             }

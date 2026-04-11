@@ -2,8 +2,9 @@ import { List, ActionPanel, Action, Icon, Color, showToast, Toast } from "@rayca
 import { usePromise } from "@raycast/utils";
 import { useState } from "react";
 import { EditTaskLoader } from "./edit-task";
+import { OpenBrowserAction } from "./open-browser";
 import TaskDetail, { setTaskStatus } from "./task-detail";
-import { useActiveProject } from "./preferences";
+import { getProjectName, useActiveProject } from "./preferences";
 import { BacklogTaskSummary, listTaskSummaries } from "./backlog";
 
 const STATUS_ICONS: Record<string, { icon: Icon; color: Color }> = {
@@ -51,6 +52,7 @@ export default function Command() {
   );
 
   const sections = data || {};
+  const projectName = getProjectName(config, activeProject);
 
   return (
     <List
@@ -104,6 +106,7 @@ export default function Command() {
                       shortcut={{ modifiers: ["cmd"], key: "e" }}
                       target={<EditTaskLoader taskId={task.id} projectDir={activeProject} onComplete={revalidate} />}
                     />
+                    <OpenBrowserAction projectDir={activeProject} projectName={projectName} />
                     <Action.CopyToClipboard title="Copy Task ID" content={task.id} />
                     <Action
                       title="Refresh"

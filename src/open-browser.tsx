@@ -11,9 +11,9 @@ import {
   Toast,
 } from "@raycast/api";
 import { useCachedState } from "@raycast/utils";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ensureBrowserServer } from "./browser";
-import { useActiveProject } from "./preferences";
+import { getProjectConfig, getProjectName, useActiveProject } from "./preferences";
 
 type LaunchState =
   | { kind: "loading"; message: string }
@@ -22,6 +22,28 @@ type LaunchState =
 
 export default function Command() {
   const [activeProject, , config] = useActiveProject();
+  return <OpenBrowserView projectDir={activeProject} projectName={getProjectName(config, activeProject)} />;
+}
+
+export function OpenBrowserAction({ projectDir, projectName }: { projectDir: string; projectName?: string }) {
+  return (
+    <Action.Push
+      title="Open Browser"
+      icon={Icon.Globe}
+      shortcut={{ modifiers: ["cmd"], key: "o" }}
+      target={<OpenBrowserView projectDir={projectDir} projectName={projectName} />}
+    />
+  );
+}
+
+export function OpenBrowserView({
+  projectDir,
+  projectName: initialProjectName,
+}: {
+  projectDir?: string;
+  projectName?: string;
+}) {
+  const config = getProjectConfig();
   const [knownPorts, setKnownPorts] = useCachedState<Record<string, number>>("browser-ports", {});
   const [state, setState] = useState<LaunchState>({
     kind: "loading",
@@ -29,22 +51,25 @@ export default function Command() {
   });
   const [retryCount, setRetryCount] = useState(0);
   const knownPortsRef = useRef(knownPorts);
+  const projectNameRef = useRef("");
 
   useEffect(() => {
     knownPortsRef.current = knownPorts;
   }, [knownPorts]);
 
-  const projectName = useMemo(
-    () => config.projects.find((candidate) => candidate.path === activeProject)?.name ?? activeProject,
-    [config.projects, activeProject],
-  );
+  const effectiveProjectDir = projectDir ?? config.projects[0]?.path ?? "";
+  const projectName = initialProjectName ?? getProjectName(config, effectiveProjectDir) ?? effectiveProjectDir;
+
+  useEffect(() => {
+    projectNameRef.current = projectName;
+  }, [projectName]);
 
   useEffect(() => {
     let cancelled = false;
     let activeToast: Toast | undefined;
 
     async function launchBrowser() {
-      if (!activeProject) {
+      if (!effectiveProjectDir) {
         if (!cancelled) {
           setState({ kind: "error", message: "No active Backlog project is configured." });
         }
@@ -52,32 +77,32 @@ export default function Command() {
       }
 
       if (!cancelled) {
-        setState({ kind: "loading", message: `Opening browser for ${projectName}...` });
+        setState({ kind: "loading", message: `Opening browser for ${projectNameRef.current}...` });
       }
 
       const toast = await showToast({
         style: Toast.Style.Animated,
         title: "Opening Backlog browser",
-        message: projectName,
+        message: projectNameRef.current,
       });
       activeToast = toast;
       if (cancelled) return;
 
       try {
-        const result = await ensureBrowserServer(activeProject, knownPortsRef.current[activeProject]);
+        const result = await ensureBrowserServer(effectiveProjectDir, knownPortsRef.current[effectiveProjectDir]);
         if (cancelled) return;
 
-        setKnownPorts((current) => ({ ...(current ?? {}), [activeProject]: result.port }));
+        setKnownPorts((current) => ({ ...current, [effectiveProjectDir]: result.port }));
 
         toast.style = Toast.Style.Success;
         toast.title = result.reused ? "Opened existing Backlog browser" : "Started Backlog browser";
-        toast.message = `${projectName} on :${result.port}`;
+        toast.message = `${projectNameRef.current} on :${result.port}`;
 
         setState({
           kind: "success",
           message: result.reused
-            ? `Opened existing browser for ${projectName} on port ${result.port}.`
-            : `Started browser for ${projectName} on port ${result.port}.`,
+            ? `Opened existing browser for ${projectNameRef.current} on port ${result.port}.`
+            : `Started browser for ${projectNameRef.current} on port ${result.port}.`,
           port: result.port,
           url: result.url,
         });
@@ -86,7 +111,7 @@ export default function Command() {
         if (cancelled) return;
         await closeMainWindow();
         if (cancelled) return;
-        await showHUD(`Backlog browser: ${projectName} (${result.port})`);
+        await showHUD(`Backlog browser: ${projectNameRef.current} (${result.port})`);
       } catch (error) {
         if (cancelled) return;
 
@@ -104,7 +129,7 @@ export default function Command() {
       cancelled = true;
       void activeToast?.hide();
     };
-  }, [activeProject, projectName, retryCount, setKnownPorts]);
+  }, [effectiveProjectDir, retryCount, setKnownPorts]);
 
   const markdown = [
     "# Open Backlog Browser",

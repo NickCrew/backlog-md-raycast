@@ -32,6 +32,10 @@ export function getProjectConfig(): ProjectConfig {
   return { backlogPath, projects };
 }
 
+export function getProjectName(config: ProjectConfig, projectPath?: string): string | undefined {
+  return config.projects.find((project) => project.path === projectPath)?.name;
+}
+
 export function useActiveProject(): [string, (path: string) => void, ProjectConfig] {
   const config = getProjectConfig();
   const [activeProject, setActiveProject] = useCachedState<string>("active-project", config.projects[0]?.path || "");
