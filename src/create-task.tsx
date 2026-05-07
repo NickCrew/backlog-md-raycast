@@ -20,8 +20,6 @@ interface CreateTaskValues extends Record<string, unknown> {
   labels?: string;
   assignee?: string;
   isDraft?: boolean;
-  parent?: string;
-  dependsOn?: string;
   plan?: string;
   notes?: string;
   finalSummary?: string;
@@ -119,8 +117,6 @@ export default function Command() {
   const [activeProject, setActiveProject, config] = useActiveProject();
   const [parentTask, setParentTask] = useState<BacklogTaskSummary | undefined>();
   const [dependencyTasks, setDependencyTasks] = useState<BacklogTaskSummary[]>([]);
-  const [manualParentId, setManualParentId] = useState("");
-  const [manualDependencyIds, setManualDependencyIds] = useState("");
   const [referenceFiles, setReferenceFiles] = useState<string[]>([]);
   const [documentFiles, setDocumentFiles] = useState<string[]>([]);
 
@@ -131,8 +127,6 @@ export default function Command() {
   useEffect(() => {
     setParentTask(undefined);
     setDependencyTasks([]);
-    setManualParentId("");
-    setManualDependencyIds("");
     setReferenceFiles([]);
     setDocumentFiles([]);
   }, [activeProject]);
@@ -176,23 +170,13 @@ export default function Command() {
     }
 
     // Parent task
-    const parentId = values.parent?.trim() || parentTask?.id;
-    if (parentId) {
-      args.push("--parent", parentId);
+    if (parentTask) {
+      args.push("--parent", parentTask.id);
     }
 
     // Dependencies
-    const dependsOn = Array.from(
-      new Set([
-        ...dependencyTasks.map((task) => task.id),
-        ...(values.dependsOn || "")
-          .split(",")
-          .map((value) => value.trim())
-          .filter(Boolean),
-      ]),
-    );
-    if (dependsOn.length > 0) {
-      args.push("--depends-on", dependsOn.join(","));
+    if (dependencyTasks.length > 0) {
+      args.push("--depends-on", dependencyTasks.map((task) => task.id).join(","));
     }
 
     const plan = (values.plan as string)?.trim();
@@ -275,16 +259,14 @@ export default function Command() {
             <Action.Push
               title={parentTask ? "Change Parent Task" : "Select Parent Task"}
               icon={Icon.List}
+              shortcut={{ modifiers: ["cmd", "opt"], key: "p" }}
               target={
                 <TaskPicker
                   projectDir={activeProject}
                   navigationTitle="Select Parent Task"
                   actionTitle="Use as Parent Task"
                   excludedTaskIds={dependencyTasks.map((task) => task.id)}
-                  onSelect={(task) => {
-                    setParentTask(task);
-                    setManualParentId("");
-                  }}
+                  onSelect={(task) => setParentTask(task)}
                 />
               }
             />
@@ -387,37 +369,22 @@ export default function Command() {
 
       {/* ── Relationships ── */}
       <Form.Description
+        key={`parent-${parentTask?.id ?? "none"}`}
         title="Parent Task"
         text={
-          parentTask ? formatTaskOption(parentTask) : "None selected. Use Select Parent Task from the actions menu."
+          parentTask
+            ? formatTaskOption(parentTask)
+            : "None selected. ⌘⌥P, or use Select Parent Task from the actions menu."
         }
       />
-      <Form.TextField
-        id="parent"
-        title="Parent Task ID"
-        value={manualParentId}
-        onChange={(value) => {
-          setManualParentId(value);
-          if (value.trim()) {
-            setParentTask(undefined);
-          }
-        }}
-        placeholder="Optional manual fallback, e.g. task-42"
-      />
       <Form.Description
+        key={`deps-${dependencyTasks.map((t) => t.id).join(",") || "none"}`}
         title="Depends On"
         text={
           dependencyTasks.length > 0
             ? dependencyTasks.map((task) => `- ${formatTaskOption(task)}`).join("\n")
-            : "None selected. Use Add Dependency from the actions menu."
+            : "None selected. ⌘⇧P, or use Add Dependency from the actions menu."
         }
-      />
-      <Form.TextField
-        id="dependsOn"
-        title="Dependency IDs"
-        value={manualDependencyIds}
-        onChange={setManualDependencyIds}
-        placeholder="Optional manual fallback, e.g. task-1, task-2"
       />
 
       <Form.Separator />
