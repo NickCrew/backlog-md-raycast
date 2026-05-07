@@ -20,9 +20,6 @@ interface CreateTaskValues extends Record<string, unknown> {
   labels?: string;
   assignee?: string;
   isDraft?: boolean;
-  plan?: string;
-  notes?: string;
-  finalSummary?: string;
   references?: string[];
   documents?: string[];
   noDodDefaults?: boolean;
@@ -177,21 +174,6 @@ export default function Command() {
     // Dependencies
     if (dependencyTasks.length > 0) {
       args.push("--depends-on", dependencyTasks.map((task) => task.id).join(","));
-    }
-
-    const plan = (values.plan as string)?.trim();
-    if (plan) {
-      args.push("--plan", plan);
-    }
-
-    const notes = (values.notes as string)?.trim();
-    if (notes) {
-      args.push("--notes", notes);
-    }
-
-    const finalSummary = (values.finalSummary as string)?.trim();
-    if (finalSummary) {
-      args.push("--final-summary", finalSummary);
     }
 
     // Acceptance criteria (multiple --ac flags)
@@ -401,18 +383,6 @@ export default function Command() {
       {dodItems.map((_, i) => (
         <Form.TextField key={`dod-${i}`} id={`dod-${i}`} title={`DoD ${i + 1}`} placeholder="Done criterion..." />
       ))}
-
-      <Form.Separator />
-
-      {/* ── Plan & Summary ── */}
-      <Form.Description text="Plan is usually filled in by the agent that picks up the task." />
-      <Form.TextArea id="plan" title="Plan" placeholder="Implementation plan..." />
-      <Form.TextArea id="notes" title="Implementation Notes" placeholder="Implementation notes..." />
-      <Form.TextArea
-        id="finalSummary"
-        title="Final Summary"
-        placeholder="What should be true when this task is done?"
-      />
 
       <Form.Separator />
 
