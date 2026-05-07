@@ -305,7 +305,7 @@ export default function Command() {
             <Action
               title="Add Acceptance Criterion"
               icon={Icon.Plus}
-              shortcut={{ modifiers: ["cmd"], key: "a" }}
+              shortcut={{ modifiers: ["cmd", "opt"], key: "a" }}
               onAction={() => setAcItems([...acItems, ""])}
             />
             <Action
@@ -423,7 +423,7 @@ export default function Command() {
       <Form.Separator />
 
       {/* ── Acceptance Criteria (dynamic) ── */}
-      <Form.Description text="Acceptance Criteria  ⌘A to add" />
+      <Form.Description text="Acceptance Criteria  ⌘⌥A to add" />
       {acItems.map((_, i) => (
         <Form.TextField key={`ac-${i}`} id={`ac-${i}`} title={`AC ${i + 1}`} placeholder="Criterion..." />
       ))}
