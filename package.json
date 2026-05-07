@@ -65,6 +65,14 @@
       "keywords": ["find", "search", "query", "backlog"]
     },
     {
+      "name": "list-docs",
+      "title": "List Docs",
+      "subtitle": "Backlog.md",
+      "description": "Browse Backlog.md documents and preview their contents",
+      "mode": "view",
+      "keywords": ["docs", "documents", "backlog", "list", "browse"]
+    },
+    {
       "name": "open-browser",
       "title": "Open Browser",
       "subtitle": "Backlog.md",
