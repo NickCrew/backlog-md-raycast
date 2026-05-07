@@ -46,8 +46,8 @@ export default function EditTask({
     }
 
     const priority = values.priority;
-    if (priority !== task.priority) {
-      args.push("--priority", priority || "low");
+    if (priority && priority !== task.priority) {
+      args.push("--priority", priority);
     }
 
     const assignee = values.assignee?.trim();
