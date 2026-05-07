@@ -70,7 +70,15 @@
       "subtitle": "Backlog.md",
       "description": "Open the Backlog.md browser UI using a reused or intelligently selected local port",
       "mode": "view",
-      "keywords": ["browser", "web", "ui", "open", "dashboard"]
+      "keywords": ["browser", "web", "ui", "open", "dashboard"],
+      "arguments": [
+        {
+          "name": "projectName",
+          "placeholder": "Project name (optional)",
+          "type": "text",
+          "required": false
+        }
+      ]
     }
   ],
   "dependencies": {

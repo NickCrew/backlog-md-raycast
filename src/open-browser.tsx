@@ -4,6 +4,7 @@ import {
   closeMainWindow,
   Detail,
   Icon,
+  LaunchProps,
   open,
   openExtensionPreferences,
   showHUD,
@@ -13,15 +14,47 @@ import {
 import { useCachedState } from "@raycast/utils";
 import { useEffect, useRef, useState } from "react";
 import { ensureBrowserServer } from "./browser";
-import { getProjectConfig, getProjectName, useActiveProject } from "./preferences";
+import { getProjectConfig, getProjectName, ProjectConfig, useActiveProject } from "./preferences";
 
 type LaunchState =
   | { kind: "loading"; message: string }
   | { kind: "success"; message: string; port: number; url: string }
   | { kind: "error"; message: string };
 
-export default function Command() {
+type OpenBrowserArguments = { projectName?: string };
+
+function resolveProjectByName(config: ProjectConfig, query: string): { path: string; name: string } | undefined {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return undefined;
+  return (
+    config.projects.find((p) => p.name.toLowerCase() === needle) ??
+    config.projects.find((p) => p.name.toLowerCase().includes(needle))
+  );
+}
+
+export default function Command(props: LaunchProps<{ arguments: OpenBrowserArguments }>) {
   const [activeProject, , config] = useActiveProject();
+  const requested = props.arguments?.projectName?.trim();
+
+  if (requested) {
+    const match = resolveProjectByName(config, requested);
+    if (!match) {
+      const available = config.projects.map((p) => p.name).join(", ") || "(none configured)";
+      return (
+        <Detail
+          navigationTitle="Open Browser"
+          markdown={`# Project not found\n\nNo configured project matches **${requested}**.\n\nAvailable projects: ${available}`}
+          actions={
+            <ActionPanel>
+              <Action title="Open Extension Preferences" icon={Icon.Gear} onAction={openExtensionPreferences} />
+            </ActionPanel>
+          }
+        />
+      );
+    }
+    return <OpenBrowserView projectDir={match.path} projectName={match.name} />;
+  }
+
   return <OpenBrowserView projectDir={activeProject} projectName={getProjectName(config, activeProject)} />;
 }
 
