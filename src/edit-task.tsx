@@ -105,19 +105,27 @@ export default function EditTask({
       args.push("--description", description || "");
     }
 
-    const notes = (values.notes as string)?.trim();
-    if (notes !== (task.notes || "")) {
-      args.push("--notes", notes || "");
-    }
-
     const plan = (values.plan as string)?.trim();
     if (plan !== (task.implementationPlan || "")) {
       args.push("--plan", plan || "");
     }
 
-    const finalSummary = (values.finalSummary as string)?.trim();
-    if (finalSummary !== (task.finalSummary || "")) {
-      args.push("--final-summary", finalSummary || "");
+    // For notes and final summary, append wins over replace when both are non-empty —
+    // avoids the CLI seeing two conflicting flags for the same field.
+    const notesAppend = (values.notesAppend as string)?.trim();
+    const notesReplace = (values.notesReplace as string)?.trim();
+    if (notesAppend) {
+      args.push("--append-notes", notesAppend);
+    } else if (notesReplace !== (task.notes || "")) {
+      args.push("--notes", notesReplace || "");
+    }
+
+    const summaryAppend = (values.finalSummaryAppend as string)?.trim();
+    const summaryReplace = (values.finalSummaryReplace as string)?.trim();
+    if (summaryAppend) {
+      args.push("--append-final-summary", summaryAppend);
+    } else if (summaryReplace !== (task.finalSummary || "")) {
+      args.push("--final-summary", summaryReplace || "");
     }
 
     const newDepIds = dependencyTasks.map((t) => t.id);
@@ -310,12 +318,29 @@ export default function EditTask({
 
       <Form.Separator />
       <Form.TextArea id="plan" title="Plan" defaultValue={task.implementationPlan} info="Replaces existing plan" />
-      <Form.TextArea id="notes" title="Implementation Notes" defaultValue={task.notes} info="Replaces existing notes" />
       <Form.TextArea
-        id="finalSummary"
-        title="Final Summary"
+        id="notesAppend"
+        title="Append Notes"
+        placeholder="Add a paragraph to the existing notes..."
+        info="Appended to existing notes. Preferred for in-progress updates."
+      />
+      <Form.TextArea
+        id="notesReplace"
+        title="Replace Notes"
+        defaultValue={task.notes}
+        info="Replaces all existing notes. Ignored if Append Notes is filled."
+      />
+      <Form.TextArea
+        id="finalSummaryAppend"
+        title="Append Final Summary"
+        placeholder="Add to the final summary..."
+        info="Appended to existing summary."
+      />
+      <Form.TextArea
+        id="finalSummaryReplace"
+        title="Replace Final Summary"
         defaultValue={task.finalSummary}
-        info="Replaces existing summary"
+        info="Replaces existing summary. Ignored if Append Final Summary is filled."
       />
     </Form>
   );
