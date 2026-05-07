@@ -1,8 +1,9 @@
 import { Form, ActionPanel, Action, showToast, Toast, Icon, useNavigation } from "@raycast/api";
 import { usePromise } from "@raycast/utils";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { loadTask, TaskData } from "./task-data";
-import { runBacklog } from "./backlog";
+import { BacklogTaskSummary, listTaskSummaries, runBacklog } from "./backlog";
+import TaskPicker, { formatTaskOption } from "./task-picker";
 
 const PRIORITIES = [
   { title: "None", value: "" },
@@ -53,6 +54,21 @@ export default function EditTask({
   const [acNewSlots, setAcNewSlots] = useState<string[]>([]);
   const [dodNewSlots, setDodNewSlots] = useState<string[]>([]);
 
+  const [dependencyTasks, setDependencyTasks] = useState<BacklogTaskSummary[]>(() =>
+    task.dependencies.map((id) => ({ id, title: id, priority: "", status: "" })),
+  );
+
+  // Enrich placeholder dependency entries (initially seeded with id-as-title) with
+  // their real summaries once we've loaded the project's task list.
+  const { data: allTasks } = usePromise(async (cwd: string) => listTaskSummaries(cwd), [projectDir], {
+    execute: !!projectDir,
+  });
+  useEffect(() => {
+    if (!allTasks) return;
+    const byId = new Map(allTasks.map((t) => [t.id, t]));
+    setDependencyTasks((current) => current.map((d) => byId.get(d.id) ?? d));
+  }, [allTasks]);
+
   async function handleSubmit(values: Record<string, unknown>) {
     setIsSubmitting(true);
     const args: string[] = ["task", "edit", task.id];
@@ -102,6 +118,14 @@ export default function EditTask({
     const finalSummary = (values.finalSummary as string)?.trim();
     if (finalSummary !== (task.finalSummary || "")) {
       args.push("--final-summary", finalSummary || "");
+    }
+
+    const newDepIds = dependencyTasks.map((t) => t.id);
+    const originalDepIds = task.dependencies;
+    const depsChanged =
+      newDepIds.length !== originalDepIds.length || newDepIds.some((id, i) => id !== originalDepIds[i]);
+    if (depsChanged) {
+      args.push("--depends-on", newDepIds.join(","));
     }
 
     const removedAcIndices = new Set((values.removeAc as string[] | undefined)?.map((s) => Number(s)) ?? []);
@@ -162,6 +186,29 @@ export default function EditTask({
       actions={
         <ActionPanel>
           <Action.SubmitForm title="Save Changes" icon={Icon.Check} onSubmit={handleSubmit} />
+          <Action.Push
+            title="Add Dependency"
+            icon={Icon.Plus}
+            shortcut={{ modifiers: ["cmd", "shift"], key: "p" }}
+            target={
+              <TaskPicker
+                projectDir={projectDir}
+                navigationTitle="Add Dependency"
+                actionTitle="Add Dependency"
+                excludedTaskIds={[task.id, ...dependencyTasks.map((d) => d.id)]}
+                onSelect={(picked) => setDependencyTasks((current) => [...current, picked])}
+              />
+            }
+          />
+          {dependencyTasks.length > 0 ? (
+            <Action
+              title="Remove Last Dependency"
+              icon={Icon.Minus}
+              style={Action.Style.Destructive}
+              shortcut={{ modifiers: ["opt", "shift"], key: "p" }}
+              onAction={() => setDependencyTasks((current) => current.slice(0, -1))}
+            />
+          ) : null}
           <Action
             title="Add Acceptance Criterion"
             icon={Icon.Plus}
@@ -192,6 +239,17 @@ export default function EditTask({
       </Form.Dropdown>
       <Form.TextField id="labels" title="Labels" defaultValue={task.labels.join(", ")} />
       <Form.TextField id="assignee" title="Assignee" defaultValue={task.assignee} />
+
+      <Form.Separator />
+      <Form.Description
+        key={`deps-${dependencyTasks.map((t) => t.id).join(",") || "none"}`}
+        title="Depends On"
+        text={
+          dependencyTasks.length > 0
+            ? dependencyTasks.map((d) => `- ${formatTaskOption(d)}`).join("\n")
+            : "None. ⌘⇧P, or use Add Dependency from the actions menu."
+        }
+      />
 
       <Form.Separator />
       <Form.Description text="Acceptance Criteria  ⌘⌥A to add" />
