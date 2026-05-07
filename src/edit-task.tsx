@@ -18,6 +18,23 @@ const STATUSES = [
   { title: "Blocked", value: "blocked" },
 ];
 
+interface ChecklistEntry {
+  index: number; // 1-based, matches the CLI's --check-ac/--remove-ac semantics
+  checked: boolean;
+  text: string;
+}
+
+function parseChecklist(lines: string[]): ChecklistEntry[] {
+  return lines.map((raw, i) => {
+    const m = raw.match(/^-\s*\[([ xX])\]\s*(.*)$/);
+    return {
+      index: i + 1,
+      checked: m ? m[1].toLowerCase() === "x" : false,
+      text: m ? m[2] : raw.replace(/^-\s*/, ""),
+    };
+  });
+}
+
 export default function EditTask({
   task,
   projectDir,
@@ -30,58 +47,92 @@ export default function EditTask({
   const { pop } = useNavigation();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  async function handleSubmit(values: Record<string, string>) {
+  const acEntries = parseChecklist(task.acceptanceCriteria);
+  const dodEntries = parseChecklist(task.definitionOfDone);
+
+  const [acNewSlots, setAcNewSlots] = useState<string[]>([]);
+  const [dodNewSlots, setDodNewSlots] = useState<string[]>([]);
+
+  async function handleSubmit(values: Record<string, unknown>) {
     setIsSubmitting(true);
     const args: string[] = ["task", "edit", task.id];
     const baseLength = args.length;
 
-    const title = values.title?.trim();
+    const title = (values.title as string)?.trim();
     if (title && title !== task.title) {
       args.push("--title", title);
     }
 
-    const status = values.status;
+    const status = values.status as string;
     if (status && status !== task.status.toLowerCase()) {
       args.push("--status", status);
     }
 
-    const priority = values.priority;
+    const priority = values.priority as string;
     if (priority && priority !== task.priority) {
       args.push("--priority", priority);
     }
 
-    const assignee = values.assignee?.trim();
+    const assignee = (values.assignee as string)?.trim();
     if (assignee !== (task.assignee || "")) {
       args.push("--assignee", assignee || "");
     }
 
-    const labels = values.labels?.trim();
+    const labels = (values.labels as string)?.trim();
     const currentLabels = task.labels.join(", ");
     if (labels !== currentLabels) {
       args.push("--label", labels || "");
     }
 
-    const description = values.description?.trim();
+    const description = (values.description as string)?.trim();
     if (description !== (task.description || "")) {
       args.push("--description", description || "");
     }
 
-    const notes = values.notes?.trim();
+    const notes = (values.notes as string)?.trim();
     if (notes !== (task.notes || "")) {
       args.push("--notes", notes || "");
     }
 
-    const plan = values.plan?.trim();
+    const plan = (values.plan as string)?.trim();
     if (plan !== (task.implementationPlan || "")) {
       args.push("--plan", plan || "");
     }
 
-    const finalSummary = values.finalSummary?.trim();
+    const finalSummary = (values.finalSummary as string)?.trim();
     if (finalSummary !== (task.finalSummary || "")) {
       args.push("--final-summary", finalSummary || "");
     }
 
-    // Only submit if there are actual changes
+    const removedAcIndices = new Set((values.removeAc as string[] | undefined)?.map((s) => Number(s)) ?? []);
+    const removedDodIndices = new Set((values.removeDod as string[] | undefined)?.map((s) => Number(s)) ?? []);
+
+    for (const entry of acEntries) {
+      if (removedAcIndices.has(entry.index)) continue;
+      const checked = Boolean(values[`ac-${entry.index}`]);
+      if (checked && !entry.checked) args.push("--check-ac", String(entry.index));
+      else if (!checked && entry.checked) args.push("--uncheck-ac", String(entry.index));
+    }
+    for (const entry of dodEntries) {
+      if (removedDodIndices.has(entry.index)) continue;
+      const checked = Boolean(values[`dod-${entry.index}`]);
+      if (checked && !entry.checked) args.push("--check-dod", String(entry.index));
+      else if (!checked && entry.checked) args.push("--uncheck-dod", String(entry.index));
+    }
+
+    // Removals: descending so earlier-index removals don't shift later ones in the CLI
+    [...removedAcIndices].sort((a, b) => b - a).forEach((i) => args.push("--remove-ac", String(i)));
+    [...removedDodIndices].sort((a, b) => b - a).forEach((i) => args.push("--remove-dod", String(i)));
+
+    for (let i = 0; i < acNewSlots.length; i++) {
+      const text = (values[`ac-new-${i}`] as string)?.trim();
+      if (text) args.push("--ac", text);
+    }
+    for (let i = 0; i < dodNewSlots.length; i++) {
+      const text = (values[`dod-new-${i}`] as string)?.trim();
+      if (text) args.push("--dod", text);
+    }
+
     if (args.length === baseLength) {
       showToast({ style: Toast.Style.Success, title: "No changes to save" });
       setIsSubmitting(false);
@@ -111,6 +162,18 @@ export default function EditTask({
       actions={
         <ActionPanel>
           <Action.SubmitForm title="Save Changes" icon={Icon.Check} onSubmit={handleSubmit} />
+          <Action
+            title="Add Acceptance Criterion"
+            icon={Icon.Plus}
+            shortcut={{ modifiers: ["cmd", "opt"], key: "a" }}
+            onAction={() => setAcNewSlots((slots) => [...slots, ""])}
+          />
+          <Action
+            title="Add Definition of Done Item"
+            icon={Icon.Plus}
+            shortcut={{ modifiers: ["cmd"], key: "d" }}
+            onAction={() => setDodNewSlots((slots) => [...slots, ""])}
+          />
         </ActionPanel>
       }
     >
@@ -129,6 +192,64 @@ export default function EditTask({
       </Form.Dropdown>
       <Form.TextField id="labels" title="Labels" defaultValue={task.labels.join(", ")} />
       <Form.TextField id="assignee" title="Assignee" defaultValue={task.assignee} />
+
+      <Form.Separator />
+      <Form.Description text="Acceptance Criteria  ⌘⌥A to add" />
+      {acEntries.map((entry) => (
+        <Form.Checkbox
+          key={`ac-${entry.index}`}
+          id={`ac-${entry.index}`}
+          title={`AC ${entry.index}`}
+          label={entry.text}
+          defaultValue={entry.checked}
+        />
+      ))}
+      {acEntries.length > 0 ? (
+        <Form.TagPicker id="removeAc" title="Remove" placeholder="Select criteria to delete">
+          {acEntries.map((entry) => (
+            <Form.TagPicker.Item
+              key={`ac-rm-${entry.index}`}
+              value={String(entry.index)}
+              title={`AC ${entry.index}: ${entry.text}`}
+            />
+          ))}
+        </Form.TagPicker>
+      ) : null}
+      {acNewSlots.map((_, i) => (
+        <Form.TextField key={`ac-new-${i}`} id={`ac-new-${i}`} title={`New AC ${i + 1}`} placeholder="Criterion..." />
+      ))}
+
+      <Form.Separator />
+      <Form.Description text="Definition of Done  ⌘D to add" />
+      {dodEntries.map((entry) => (
+        <Form.Checkbox
+          key={`dod-${entry.index}`}
+          id={`dod-${entry.index}`}
+          title={`DoD ${entry.index}`}
+          label={entry.text}
+          defaultValue={entry.checked}
+        />
+      ))}
+      {dodEntries.length > 0 ? (
+        <Form.TagPicker id="removeDod" title="Remove" placeholder="Select items to delete">
+          {dodEntries.map((entry) => (
+            <Form.TagPicker.Item
+              key={`dod-rm-${entry.index}`}
+              value={String(entry.index)}
+              title={`DoD ${entry.index}: ${entry.text}`}
+            />
+          ))}
+        </Form.TagPicker>
+      ) : null}
+      {dodNewSlots.map((_, i) => (
+        <Form.TextField
+          key={`dod-new-${i}`}
+          id={`dod-new-${i}`}
+          title={`New DoD ${i + 1}`}
+          placeholder="Done criterion..."
+        />
+      ))}
+
       <Form.Separator />
       <Form.TextArea id="plan" title="Plan" defaultValue={task.implementationPlan} info="Replaces existing plan" />
       <Form.TextArea id="notes" title="Implementation Notes" defaultValue={task.notes} info="Replaces existing notes" />
