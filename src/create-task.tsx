@@ -438,6 +438,7 @@ export default function Command() {
       <Form.Separator />
 
       {/* ── Plan & Summary ── */}
+      <Form.Description text="Plan is usually filled in by the agent that picks up the task." />
       <Form.TextArea id="plan" title="Plan" placeholder="Implementation plan..." />
       <Form.TextArea id="notes" title="Implementation Notes" placeholder="Implementation notes..." />
       <Form.TextArea
