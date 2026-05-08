@@ -73,11 +73,14 @@ export default function EditTask({
 
   // Milestone: task.milestone is whatever string the file recorded — could be id or title.
   // Seed with a placeholder, then swap in the real Milestone object when the list loads.
+  // Track the resolved original id separately so the change-detection at submit time
+  // compares on identity rather than string-matching against id-or-title.
   const [milestone, setMilestone] = useState<Milestone | undefined>(() =>
     task.milestone
       ? { id: task.milestone, title: task.milestone, doneCount: 0, totalCount: 0, completed: false }
       : undefined,
   );
+  const [originalMilestoneId, setOriginalMilestoneId] = useState<string | undefined>(() => task.milestone || undefined);
   const { data: allMilestones } = usePromise(async (cwd: string) => listMilestones(cwd), [projectDir], {
     execute: !!projectDir,
   });
@@ -86,6 +89,7 @@ export default function EditTask({
     const match =
       allMilestones.find((m) => m.id === task.milestone) ?? allMilestones.find((m) => m.title === task.milestone);
     if (match) {
+      setOriginalMilestoneId(match.id);
       // Only enrich if the user hasn't replaced the placeholder by picking a different milestone.
       setMilestone((current) => (current && current.id === task.milestone ? match : current));
     }
@@ -158,11 +162,12 @@ export default function EditTask({
       args.push("--depends-on", newDepIds.join(","));
     }
 
-    // Milestone: compare against task.milestone (raw string from file, may be id or title).
-    const hadMilestone = !!task.milestone;
-    if (!milestone && hadMilestone) {
+    // Milestone: compare on the resolved original id (set during enrichment) rather than
+    // the raw task.milestone string, which may be an id-or-title that collides with another
+    // milestone's title and silently skip a real change.
+    if (!milestone && originalMilestoneId) {
       args.push("--clear-milestone");
-    } else if (milestone && milestone.id !== task.milestone && milestone.title !== task.milestone) {
+    } else if (milestone && milestone.id !== originalMilestoneId) {
       args.push("--milestone", milestone.id);
     }
 
