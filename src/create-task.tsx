@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import { BacklogTaskSummary, runBacklog } from "./backlog";
 import { useActiveProject } from "./preferences";
 import TaskPicker, { formatTaskOption } from "./task-picker";
+import MilestonePicker, { formatMilestoneOption } from "./milestone-picker";
+import { Milestone } from "./milestones-data";
 
 const PRIORITIES = [
   { title: "None", value: "" },
@@ -35,6 +37,7 @@ export default function Command() {
   const [activeProject, setActiveProject, config] = useActiveProject();
   const [parentTask, setParentTask] = useState<BacklogTaskSummary | undefined>();
   const [dependencyTasks, setDependencyTasks] = useState<BacklogTaskSummary[]>([]);
+  const [milestone, setMilestone] = useState<Milestone | undefined>();
   const [referenceFiles, setReferenceFiles] = useState<string[]>([]);
   const [documentFiles, setDocumentFiles] = useState<string[]>([]);
 
@@ -45,6 +48,7 @@ export default function Command() {
   useEffect(() => {
     setParentTask(undefined);
     setDependencyTasks([]);
+    setMilestone(undefined);
     setReferenceFiles([]);
     setDocumentFiles([]);
   }, [activeProject]);
@@ -95,6 +99,11 @@ export default function Command() {
     // Dependencies
     if (dependencyTasks.length > 0) {
       args.push("--depends-on", dependencyTasks.map((task) => task.id).join(","));
+    }
+
+    // Milestone
+    if (milestone) {
+      args.push("--milestone", milestone.id);
     }
 
     // Acceptance criteria (multiple --ac flags)
@@ -187,6 +196,19 @@ export default function Command() {
                 />
               }
             />
+            <Action.Push
+              title={milestone ? "Change Milestone" : "Set Milestone"}
+              icon={Icon.Bullseye}
+              shortcut={{ modifiers: ["cmd", "opt"], key: "m" }}
+              target={
+                <MilestonePicker
+                  projectDir={activeProject}
+                  navigationTitle="Select Milestone"
+                  actionTitle="Use as Milestone"
+                  onSelect={(m) => setMilestone(m)}
+                />
+              }
+            />
             <Action
               title="Add Acceptance Criterion"
               icon={Icon.Plus}
@@ -216,6 +238,14 @@ export default function Command() {
                 style={Action.Style.Destructive}
                 shortcut={{ modifiers: ["opt", "shift"], key: "p" }}
                 onAction={() => setDependencyTasks((current) => current.slice(0, -1))}
+              />
+            ) : null}
+            {milestone ? (
+              <Action
+                title="Clear Milestone"
+                icon={Icon.Minus}
+                style={Action.Style.Destructive}
+                onAction={() => setMilestone(undefined)}
               />
             ) : null}
             <Action
@@ -287,6 +317,13 @@ export default function Command() {
           dependencyTasks.length > 0
             ? dependencyTasks.map((task) => `- ${formatTaskOption(task)}`).join("\n")
             : "None selected. ⌘⇧P, or use Add Dependency from the actions menu."
+        }
+      />
+      <Form.Description
+        key={`milestone-${milestone?.id ?? "none"}`}
+        title="Milestone"
+        text={
+          milestone ? formatMilestoneOption(milestone) : "None. ⌘⌥M, or use Set Milestone from the actions menu."
         }
       />
 
