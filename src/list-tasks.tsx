@@ -1,9 +1,9 @@
-import { List, ActionPanel, Action, Icon, Color, showToast, Toast } from "@raycast/api";
+import { List, ActionPanel, Action, Icon, Color, showToast, Toast, confirmAlert, Alert } from "@raycast/api";
 import { usePromise } from "@raycast/utils";
 import { useState } from "react";
 import { EditTaskLoader } from "./edit-task";
 import { OpenBrowserAction } from "./open-browser";
-import TaskDetail, { setTaskStatus } from "./task-detail";
+import TaskDetail, { demoteTask, setTaskStatus } from "./task-detail";
 import { getProjectName, useActiveProject } from "./preferences";
 import { BacklogTaskSummary, listTaskSummaries } from "./backlog";
 
@@ -113,6 +113,21 @@ export default function Command() {
                       icon={Icon.ArrowClockwise}
                       shortcut={{ modifiers: ["cmd"], key: "r" }}
                       onAction={revalidate}
+                    />
+                    <Action
+                      title="Demote to Draft"
+                      icon={Icon.ArrowDown}
+                      style={Action.Style.Destructive}
+                      onAction={async () => {
+                        const ok = await confirmAlert({
+                          title: "Demote to draft?",
+                          message: `${task.id} will be moved back to drafts and removed from the active task list.`,
+                          primaryAction: { title: "Demote", style: Alert.ActionStyle.Destructive },
+                        });
+                        if (!ok) return;
+                        await demoteTask(task.id, activeProject);
+                        revalidate();
+                      }}
                     />
                     <ActionPanel.Section title="Set Status">
                       {task.status.toLowerCase() !== "in progress" && (

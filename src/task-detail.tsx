@@ -87,6 +87,17 @@ export async function setTaskStatus(taskId: string, status: string, projectDir: 
   }
 }
 
+export async function demoteTask(taskId: string, projectDir: string) {
+  await showToast({ style: Toast.Style.Animated, title: `Demoting ${taskId}...` });
+  try {
+    await runBacklog(["task", "demote", taskId], projectDir);
+    await showToast({ style: Toast.Style.Success, title: `${taskId} demoted to draft` });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await showToast({ style: Toast.Style.Failure, title: "Failed to demote", message: message.split("\n")[0] });
+  }
+}
+
 export default function TaskDetail({
   taskId,
   projectDir,
