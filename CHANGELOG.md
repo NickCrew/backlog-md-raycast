@@ -20,7 +20,9 @@
 ### Fixes
 
 - **Edit Task** — clearing priority to None no longer silently sends `--priority low`
+- **Edit Task** — milestone change detection now compares on the resolved milestone id rather than the raw string from the task file, so a picked milestone whose title happens to match the original is no longer skipped
 - **Create Task** — the Add Acceptance Criterion keyboard shortcut now works inside form fields (was Command-A, which collided with macOS text-field "Select All"; now Command-Option-A)
+- **Open Browser** — when the project-name launch argument matches more than one configured project, the command now surfaces the ambiguous candidates instead of silently picking the first match
 
 ## [Initial Version] - {PR_MERGE_DATE}
 
