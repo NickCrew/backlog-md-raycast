@@ -322,9 +322,7 @@ export default function Command() {
       <Form.Description
         key={`milestone-${milestone?.id ?? "none"}`}
         title="Milestone"
-        text={
-          milestone ? formatMilestoneOption(milestone) : "None. ⌘⌥M, or use Set Milestone from the actions menu."
-        }
+        text={milestone ? formatMilestoneOption(milestone) : "None. ⌘⌥M, or use Set Milestone from the actions menu."}
       />
 
       <Form.Separator />
