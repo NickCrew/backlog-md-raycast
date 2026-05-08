@@ -1,5 +1,27 @@
 # Backlog.md Manager Changelog
 
+## [Milestones, Docs & Editing Improvements] - {PR_MERGE_DATE}
+
+### New Features
+
+- **List Docs** — browse Backlog.md documents with a metadata sidebar (ID, type, created date, file path)
+- **Milestone Picker** — assign milestones from Create Task and Edit Task, with progress tracking and active/completed filtering
+- **Demote to Draft** — move active tasks back into the drafts folder from List and Search views
+- **Open Browser launch argument** — pass an optional project name to target a specific configured project regardless of the active selection
+- **Smart browser launcher** — reuses the last live port for a project when possible
+- **Task-surface browser actions** — open the Backlog.md browser UI directly from the task list and detail views
+
+### Improvements
+
+- **Edit Task** — manage acceptance criteria and Definition of Done (toggle, add, remove via tag picker); pick dependencies via shared task picker; append or replace modes for Notes and Final Summary
+- **Create Task** — parent, dependency, and milestone pickers (Command-Option-P, Command-Shift-P, Command-Option-M); streamlined to focus on definition fields, leaving Plan / Notes / Final Summary to the Edit Task flow
+- **Task Detail** — shows additional Backlog.md fields in the metadata sidebar
+
+### Fixes
+
+- **Edit Task** — clearing priority to None no longer silently sends `--priority low`
+- **Create Task** — the Add Acceptance Criterion keyboard shortcut now works inside form fields (was Command-A, which collided with macOS text-field "Select All"; now Command-Option-A)
+
 ## [Initial Version] - {PR_MERGE_DATE}
 
 ### New
