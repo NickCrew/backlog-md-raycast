@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { loadTask, TaskData } from "./task-data";
 import { BacklogTaskSummary, listTaskSummaries, runBacklog } from "./backlog";
 import TaskPicker, { formatTaskOption } from "./task-picker";
+import MilestonePicker, { formatMilestoneOption } from "./milestone-picker";
+import { listMilestones, Milestone } from "./milestones-data";
 
 const PRIORITIES = [
   { title: "None", value: "" },
@@ -68,6 +70,26 @@ export default function EditTask({
     const byId = new Map(allTasks.map((t) => [t.id, t]));
     setDependencyTasks((current) => current.map((d) => byId.get(d.id) ?? d));
   }, [allTasks]);
+
+  // Milestone: task.milestone is whatever string the file recorded — could be id or title.
+  // Seed with a placeholder, then swap in the real Milestone object when the list loads.
+  const [milestone, setMilestone] = useState<Milestone | undefined>(() =>
+    task.milestone
+      ? { id: task.milestone, title: task.milestone, doneCount: 0, totalCount: 0, completed: false }
+      : undefined,
+  );
+  const { data: allMilestones } = usePromise(async (cwd: string) => listMilestones(cwd), [projectDir], {
+    execute: !!projectDir,
+  });
+  useEffect(() => {
+    if (!allMilestones || !task.milestone) return;
+    const match =
+      allMilestones.find((m) => m.id === task.milestone) ?? allMilestones.find((m) => m.title === task.milestone);
+    if (match) {
+      // Only enrich if the user hasn't replaced the placeholder by picking a different milestone.
+      setMilestone((current) => (current && current.id === task.milestone ? match : current));
+    }
+  }, [allMilestones, task.milestone]);
 
   async function handleSubmit(values: Record<string, unknown>) {
     setIsSubmitting(true);
@@ -134,6 +156,14 @@ export default function EditTask({
       newDepIds.length !== originalDepIds.length || newDepIds.some((id, i) => id !== originalDepIds[i]);
     if (depsChanged) {
       args.push("--depends-on", newDepIds.join(","));
+    }
+
+    // Milestone: compare against task.milestone (raw string from file, may be id or title).
+    const hadMilestone = !!task.milestone;
+    if (!milestone && hadMilestone) {
+      args.push("--clear-milestone");
+    } else if (milestone && milestone.id !== task.milestone && milestone.title !== task.milestone) {
+      args.push("--milestone", milestone.id);
     }
 
     const removedAcIndices = new Set((values.removeAc as string[] | undefined)?.map((s) => Number(s)) ?? []);
@@ -217,6 +247,27 @@ export default function EditTask({
               onAction={() => setDependencyTasks((current) => current.slice(0, -1))}
             />
           ) : null}
+          <Action.Push
+            title={milestone ? "Change Milestone" : "Set Milestone"}
+            icon={Icon.Bullseye}
+            shortcut={{ modifiers: ["cmd", "opt"], key: "m" }}
+            target={
+              <MilestonePicker
+                projectDir={projectDir}
+                navigationTitle="Select Milestone"
+                actionTitle="Use as Milestone"
+                onSelect={(m) => setMilestone(m)}
+              />
+            }
+          />
+          {milestone ? (
+            <Action
+              title="Clear Milestone"
+              icon={Icon.Minus}
+              style={Action.Style.Destructive}
+              onAction={() => setMilestone(undefined)}
+            />
+          ) : null}
           <Action
             title="Add Acceptance Criterion"
             icon={Icon.Plus}
@@ -257,6 +308,11 @@ export default function EditTask({
             ? dependencyTasks.map((d) => `- ${formatTaskOption(d)}`).join("\n")
             : "None. ⌘⇧P, or use Add Dependency from the actions menu."
         }
+      />
+      <Form.Description
+        key={`milestone-${milestone?.id ?? "none"}`}
+        title="Milestone"
+        text={milestone ? formatMilestoneOption(milestone) : "None. ⌘⌥M, or use Set Milestone from the actions menu."}
       />
 
       <Form.Separator />
