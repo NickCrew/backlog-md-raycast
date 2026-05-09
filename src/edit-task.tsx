@@ -254,7 +254,7 @@ export default function EditTask({
           ) : null}
           <Action.Push
             title={milestone ? "Change Milestone" : "Set Milestone"}
-            icon={Icon.Bullseye}
+            icon={Icon.BullsEye}
             shortcut={{ modifiers: ["cmd", "opt"], key: "m" }}
             target={
               <MilestonePicker

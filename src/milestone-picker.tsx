@@ -33,14 +33,7 @@ export default function MilestonePicker({
   const active = visible.filter((m) => !m.completed);
   const completed = visible.filter((m) => m.completed);
 
-  const toggleAction = (
-    <Action
-      title={showCompleted ? "Hide Completed" : "Show Completed"}
-      icon={showCompleted ? Icon.EyeDisabled : Icon.Eye}
-      shortcut={{ modifiers: ["cmd"], key: "h" }}
-      onAction={() => setShowCompleted((v) => !v)}
-    />
-  );
+  const onToggleCompleted = () => setShowCompleted((v) => !v);
 
   return (
     <List isLoading={isLoading} navigationTitle={navigationTitle} searchBarPlaceholder="Search milestones...">
@@ -54,7 +47,8 @@ export default function MilestonePicker({
               pop();
             }}
             actionTitle={actionTitle}
-            toggleAction={toggleAction}
+            showCompleted={showCompleted}
+            onToggleCompleted={onToggleCompleted}
           />
         ))}
       </List.Section>
@@ -69,7 +63,8 @@ export default function MilestonePicker({
                 pop();
               }}
               actionTitle={actionTitle}
-              toggleAction={toggleAction}
+              showCompleted={showCompleted}
+              onToggleCompleted={onToggleCompleted}
             />
           ))}
         </List.Section>
@@ -78,16 +73,21 @@ export default function MilestonePicker({
   );
 }
 
+// MilestoneRow constructs the toggle Action inline rather than receiving it as a
+// prop — passing React elements across the prop boundary breaks under the dual
+// @types/react copies (project's vs. the one bundled inside @raycast/api).
 function MilestoneRow({
   milestone,
   onSelect,
   actionTitle,
-  toggleAction,
+  showCompleted,
+  onToggleCompleted,
 }: {
   milestone: Milestone;
   onSelect: () => void;
   actionTitle: string;
-  toggleAction: React.ReactNode;
+  showCompleted: boolean;
+  onToggleCompleted: () => void;
 }) {
   const percent = milestone.totalCount > 0 ? Math.round((milestone.doneCount / milestone.totalCount) * 100) : 0;
   const progressColor = milestone.completed
@@ -103,7 +103,7 @@ function MilestoneRow({
       title={milestone.title}
       subtitle={milestone.id !== milestone.title ? milestone.id : undefined}
       icon={{
-        source: milestone.completed ? Icon.CheckCircle : Icon.Bullseye,
+        source: milestone.completed ? Icon.CheckCircle : Icon.BullsEye,
         tintColor: progressColor,
       }}
       keywords={[milestone.id]}
@@ -113,8 +113,13 @@ function MilestoneRow({
       ]}
       actions={
         <ActionPanel>
-          <Action title={actionTitle} icon={Icon.Bullseye} onAction={onSelect} />
-          {toggleAction}
+          <Action title={actionTitle} icon={Icon.BullsEye} onAction={onSelect} />
+          <Action
+            title={showCompleted ? "Hide Completed" : "Show Completed"}
+            icon={showCompleted ? Icon.EyeDisabled : Icon.Eye}
+            shortcut={{ modifiers: ["cmd"], key: "h" }}
+            onAction={onToggleCompleted}
+          />
         </ActionPanel>
       }
     />
