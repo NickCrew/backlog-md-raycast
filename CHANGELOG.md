@@ -1,6 +1,6 @@
 # Backlog.md Manager Changelog
 
-## [Initial Version] - {PR_MERGE_DATE}
+## [Initial Release] - 2026-04-28
 
 ### New
 

@@ -1,17 +1,7 @@
 import { Form, ActionPanel, Action, showToast, Toast, Icon, useNavigation } from "@raycast/api";
 import { useState } from "react";
 import { runBacklog } from "./backlog";
-
-interface TaskData {
-  id: string;
-  title: string;
-  status: string;
-  priority: string;
-  labels: string[];
-  assignee: string;
-  description: string;
-  notes: string;
-}
+import type { TaskData } from "./task-detail";
 
 const PRIORITIES = [
   { title: "None", value: "" },
@@ -54,19 +44,28 @@ export default function EditTask({
     }
 
     const priority = values.priority;
-    if (priority !== task.priority) {
-      args.push("--priority", priority || "low");
+    const wantsPriorityClear = priority !== task.priority && !priority && Boolean(task.priority?.trim());
+    if (priority !== task.priority && priority) {
+      args.push("--priority", priority);
     }
 
     const assignee = values.assignee?.trim();
     if (assignee !== (task.assignee || "")) {
-      args.push("--assignee", assignee || "");
+      if (assignee) {
+        args.push("--assignee", assignee);
+      }
     }
 
     const labels = values.labels?.trim();
     const currentLabels = task.labels.join(", ");
     if (labels !== currentLabels) {
-      args.push("--label", labels || "");
+      if (labels) {
+        args.push("--label", labels);
+      } else {
+        for (const label of task.labels) {
+          args.push("--remove-label", label);
+        }
+      }
     }
 
     const description = values.description?.trim();
@@ -81,7 +80,15 @@ export default function EditTask({
 
     // Only submit if there are actual changes
     if (args.length <= 3) {
-      showToast({ style: Toast.Style.Success, title: "No changes to save" });
+      if (wantsPriorityClear) {
+        await showToast({
+          style: Toast.Style.Failure,
+          title: "Cannot clear priority",
+          message: "The backlog CLI cannot remove priority. Set a level or edit the task markdown file.",
+        });
+      } else {
+        await showToast({ style: Toast.Style.Success, title: "No changes to save" });
+      }
       setIsSubmitting(false);
       return;
     }
@@ -91,7 +98,13 @@ export default function EditTask({
     try {
       await showToast({ style: Toast.Style.Animated, title: "Updating task..." });
       await runBacklog(args, projectDir);
-      await showToast({ style: Toast.Style.Success, title: "Task updated", message: task.id });
+      await showToast({
+        style: Toast.Style.Success,
+        title: "Task updated",
+        message: wantsPriorityClear
+          ? `${task.id} — other changes saved; priority could not be cleared (CLI limitation).`
+          : task.id,
+      });
       onComplete?.();
       pop();
     } catch (error) {

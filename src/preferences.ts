@@ -3,10 +3,7 @@ import { useCachedState } from "@raycast/utils";
 import { basename, resolve } from "path";
 import { homedir } from "os";
 
-interface RawPreferences {
-  projectDirectories: string;
-  backlogPath: string;
-}
+// Use the auto-generated `Preferences` type from raycast-env.d.ts
 
 export interface ProjectConfig {
   backlogPath: string;
@@ -22,15 +19,15 @@ function expandPath(p: string): string {
 }
 
 export function getProjectConfig(): ProjectConfig {
-  const prefs = getPreferenceValues<RawPreferences>();
+  const prefs = getPreferenceValues<Preferences>();
   const backlogPath = prefs.backlogPath ? expandPath(prefs.backlogPath) : "backlog";
 
   const projects = prefs.projectDirectories
     .split(",")
-    .map((p) => p.trim())
+    .map((path: string) => path.trim())
     .filter(Boolean)
-    .map((p) => {
-      const full = expandPath(p);
+    .map((path: string) => {
+      const full = expandPath(path);
       return { name: basename(full), path: full };
     });
 
