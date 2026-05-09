@@ -18,7 +18,15 @@ On first launch, configure these extension preferences:
 
 ### List Tasks
 
-Browse tasks grouped by status with status and priority filters. Use Enter to view task details, Command-E to edit a task, Shift-Command-S to start a task, Shift-Command-D to complete a task, and Command-R to refresh. The action panel also offers Demote to Draft to move an active task back into the drafts folder.
+Browse all tasks grouped by status (To Do, In Progress, Done, Blocked). Use the action panel to filter by status or priority. If you have multiple projects configured, switch between them with the dropdown in the search bar. The action panel also offers Demote to Draft to move an active task back into the drafts folder.
+
+| Shortcut | Action                   |
+| -------- | ------------------------ |
+| `↵`      | View task details        |
+| `⌘E`     | Edit task                |
+| `⇧⌘S`    | Start task (In Progress) |
+| `⇧⌘D`    | Complete task (Done)     |
+| `⌘R`     | Refresh list             |
 
 ### Create Task
 

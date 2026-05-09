@@ -24,7 +24,7 @@
 - **Create Task** — the Add Acceptance Criterion keyboard shortcut now works inside form fields (was Command-A, which collided with macOS text-field "Select All"; now Command-Option-A)
 - **Open Browser** — when the project-name launch argument matches more than one configured project, the command now surfaces the ambiguous candidates instead of silently picking the first match
 
-## [Initial Version] - {PR_MERGE_DATE}
+## [Initial Release] - 2026-04-28
 
 ### New
 
